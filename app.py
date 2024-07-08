@@ -4,7 +4,7 @@ import streamlit as st
 
 # Page configuration
 st.set_page_config(
-    page_title="BI_Prority_JSON-CSV",
+    page_title="Priority Deliverables",
     page_icon="favicon-96.png",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -12,9 +12,7 @@ st.set_page_config(
         'About': "JSON is known as a light-weight data format type and is favored for its human readability and nesting features. It is often used in conjunction with APIs and data configuration. CSV: CSV is a data storage format that stands for Comma Separated Values with the extension . csv."
     }
 )
-
-# Title
-st.title('BI_Prority_JSON-CSV')
+st.title('Priority Deliverables')
 
 # Define function to safely load JSON data
 def load_json_safe(x):
@@ -33,49 +31,77 @@ def load_csv_data(file):
 # Main function
 def main():
     # Sidebar for uploading CSV file
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        st.sidebar.header("Upload CSV File")
-        uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type=['csv'])
+    st.sidebar.header("Upload CSV File")
+    uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type=['csv'])
 
     # If a CSV file is uploaded, load it and display its content
     if uploaded_file is not None:
         df = load_csv_data(uploaded_file)
         if df is not None:
-            with col2:
-                st.success("File successfully uploaded.")
-                st.write("Preview of the uploaded DataFrame:")
-                st.write(df.head())
+            st.success("File successfully uploaded.")
+            st.write("Preview of the uploaded DataFrame:")
+            st.write(df.head())
 
-            # Prompt the user to input the key for selecting data
-            selected_key = st.text_input('Enter the key to select data:')
+            # Options for selecting keys with their corresponding names
+            options = {
+                'business': 'Business Priorities',
+                'R&D': 'R&D Priorities',
+                'sustainability': 'Sustainability Priorities',
+                'talent': 'Talent Priorities',
+                'technology': 'Technology Priorities'
+            }
+            selected_keys = st.multiselect('Select the keys to extract data:', options.keys())
 
             # Apply the load_json_safe function to the 'Formatted Priorities' column of the DataFrame
             json_data = df['Formatted Priorities'].apply(load_json_safe)
 
+            # Sort the DataFrame by 'Company' and 'Year' columns in descending order to consider the most recent year first
+            df_sorted = df.sort_values(by=['Company', 'Year'], ascending=[True, False])
+
             # Initialize an empty list to store the extracted data
             result = []
 
+            # Track seen companies to avoid duplicates
+            seen_companies = set()
+
             # Loop through each item in the json_data Series along with its index
-            for index, item in enumerate(json_data):
-                # Check if the selected key is present in the item
-                if selected_key in item:
-                    # If the selected key is present, loop through each sub-item under the selected key
-                    for sub_item in item[selected_key]:
-                        # Add the 'Company' information from the corresponding row in the DataFrame to each sub-item
-                        sub_item['Company'] = df.iloc[index]['Company']
-                        # Append the modified sub-item to the result list
-                        result.append(sub_item)
+            for index, item in df_sorted.iterrows():
+                company = item['Company']
+                if company not in seen_companies:
+                    seen_companies.add(company)
+                    json_priorities = load_json_safe(item['Formatted Priorities'])
+                    # Check if any of the selected keys are present in the item
+                    for key in selected_keys:
+                        if key in json_priorities:
+                            # If the selected key is present, loop through each sub-item under the selected key
+                            for sub_item in json_priorities[key]:
+                                # Add the 'Company' and 'Selected Key' information from the corresponding row in the DataFrame to each sub-item
+                                formatted_data = {
+                                    'Company Name': company,
+                                    'Priority Type': options[key],
+                                    'Priority Initiative Name': sub_item.get('priority', ''),
+                                    'Priority Initiative Description': sub_item.get('description', '')
+                                }
+                                # Append the modified sub-item to the result list
+                                result.append(formatted_data)
 
             # Create a DataFrame from the extracted data
-            selected_df = pd.DataFrame(result)
+            selected_df = pd.DataFrame(result, columns=['Company Name', 'Priority Type', 'Priority Initiative Name', 'Priority Initiative Description'])
 
             # Display the extracted data in a DataFrame
             st.write(selected_df)
 
+            # Option to download the result as a CSV file
+            csv = selected_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Download data as CSV",
+                data=csv,
+                file_name='selected_data.csv',
+                mime='text/csv',
+            )
+
         else:
-            with col2:
-                st.error("Failed to load the CSV file. Please try again.")
+            st.error("Failed to load the CSV file. Please try again.")
 
 if __name__ == "__main__":
     main()
