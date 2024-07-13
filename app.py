@@ -2,45 +2,41 @@ import pandas as pd
 import json
 import streamlit as st
 
-# Page configuration
-st.set_page_config(
-    page_title="Priority Deliverables",
-    page_icon="favicon-96.png",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-    menu_items={
-        'About': "JSON is known as a light-weight data format type and is favored for its human readability and nesting features. It is often used in conjunction with APIs and data configuration. CSV: CSV is a data storage format that stands for Comma Separated Values with the extension . csv."
-    }
-)
-st.title('Priority Deliverables')
+def load_file(uploaded_file):
+    """Load the uploaded file based on its extension."""
+    try:
+        if uploaded_file.name.endswith('.csv'):
+            df = pd.read_csv(uploaded_file)
+        elif uploaded_file.name.endswith('.xls') or uploaded_file.name.endswith('.xlsx'):
+            df = pd.read_excel(uploaded_file)
+        else:
+            st.error("Unsupported file type.")
+            return None
+        return df
+    except Exception as e:
+        st.error(f"Error loading file: {e}")
+        return None
 
-# Define function to safely load JSON data
 def load_json_safe(x):
+    """Safely load JSON data from a string."""
     try:
         return json.loads(x)
     except (json.JSONDecodeError, TypeError):
         return {}
 
-# Function to load data from a CSV file
-def load_csv_data(file):
-    if file is not None:
-        df = pd.read_csv(file)
-        return df
-    return None
-
-# Main function
 def main():
-    # Sidebar for uploading CSV file
-    st.sidebar.header("Upload CSV File")
-    uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type=['csv'])
-
-    # If a CSV file is uploaded, load it and display its content
+    """Main function to run the Streamlit app."""
+    st.title("Priority Deliverable")
+    
+    # Sidebar for uploading file
+    uploaded_file = st.file_uploader("Choose a file", type=['csv', 'xls', 'xlsx'])
+    
     if uploaded_file is not None:
-        df = load_csv_data(uploaded_file)
+        df = load_file(uploaded_file)
         if df is not None:
             st.success("File successfully uploaded.")
             st.write("Preview of the uploaded DataFrame:")
-            st.write(df.head())
+            st.write(df.head(25))
 
             # Options for selecting keys with their corresponding names
             options = {
@@ -53,7 +49,7 @@ def main():
             selected_keys = st.multiselect('Select the keys to extract data:', options.keys())
 
             # Apply the load_json_safe function to the 'Formatted Priorities' column of the DataFrame
-            json_data = df['Formatted Priorities'].apply(load_json_safe)
+            df['Formatted Priorities'] = df['Formatted Priorities'].apply(load_json_safe)
 
             # Sort the DataFrame by 'Company' and 'Year' columns in descending order to consider the most recent year first
             df_sorted = df.sort_values(by=['Company', 'Year'], ascending=[True, False])
@@ -64,12 +60,12 @@ def main():
             # Track seen companies to avoid duplicates
             seen_companies = set()
 
-            # Loop through each item in the json_data Series along with its index
+            # Loop through each row in the sorted DataFrame
             for index, item in df_sorted.iterrows():
                 company = item['Company']
                 if company not in seen_companies:
                     seen_companies.add(company)
-                    json_priorities = load_json_safe(item['Formatted Priorities'])
+                    json_priorities = item['Formatted Priorities']
                     # Check if any of the selected keys are present in the item
                     for key in selected_keys:
                         if key in json_priorities:
@@ -91,26 +87,8 @@ def main():
             # Display the extracted data in a DataFrame
             st.write(selected_df)
 
-            # Option to download the result as a CSV file
-            csv = selected_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Download data as CSV",
-                data=csv,
-                file_name='selected_data.csv',
-                mime='text/csv',
-            )
-
         else:
-            st.error("Failed to load the CSV file. Please try again.")
+            st.error("Failed to load the file. Please try again.")
 
 if __name__ == "__main__":
     main()
-
-# Footer bar
-footer = """
-<style>
-.footer {position: fixed; left: 0; bottom: -17px; width: 100%; background-color: #65cff6; color: black; text-align: center; }
-</style>
-<div class="footer"><p>Copyright © 2024 Draup. All Rights Reserved.</p></div>
-"""
-st.markdown(footer, unsafe_allow_html=True)
