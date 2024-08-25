@@ -3,6 +3,7 @@ import json
 import streamlit as st
 import re
 import io
+from openpyxl import Workbook
 
 def load_file(uploaded_file):
     """Load the uploaded file based on its extension."""
@@ -76,19 +77,39 @@ def extract_priority_data(df, priority_column, selected_keys, options):
     
     return pd.DataFrame(result, columns=['Company Name', 'Priority Type', 'Priority Initiative Name', 'Priority Initiative Description'])
 
+def convert_df_to_excel(df):
+    """Convert DataFrame to an Excel file."""
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Data')
+    buffer.seek(0)
+    return buffer
+
+def convert_df_to_json(df):
+    """Convert DataFrame to a JSON file."""
+    buffer = io.BytesIO()
+    json_data = df.to_json(orient='records')
+    buffer.write(json_data.encode('utf-8'))
+    buffer.seek(0)
+    return buffer
+
+def convert_df_to_csv(df):
+    """Convert DataFrame to a CSV file."""
+    return df.to_csv(index=False).encode('utf-8')
+
 def main():
     """Main function to run the Streamlit app."""
     st.set_page_config(
-        page_title="Priority Deliverable",
+        page_title="Priority Extract Tool",
         page_icon="favicon-96.png",
         layout="wide",
         initial_sidebar_state="expanded",
         menu_items={
-            'About': "This app extracts and displays priority deliverables from uploaded datasets."
+            'About': "This app extracts and displays Priority Extract Tool from uploaded datasets."
         }
     )
 
-    st.title("Priority Deliverable")
+    st.title("Priority Extract Tool")
 
     uploaded_file = st.file_uploader("Choose a file", type=['csv', 'xls', 'xlsx'])
 
@@ -118,12 +139,8 @@ def main():
                     st.write("Preview of the extracted data:")
                     st.write(selected_df)
 
-                    @st.cache_data
-                    def convert_df_to_csv(df):
-                        return df.to_csv(index=False).encode('utf-8')
-
+                    # CSV download
                     csv_data = convert_df_to_csv(selected_df)
-
                     st.download_button(
                         label="Download data as CSV",
                         data=csv_data,
@@ -132,8 +149,45 @@ def main():
                         use_container_width=True
                     )
 
+                    # Excel download
+                    excel_buffer = convert_df_to_excel(selected_df)
+                    st.download_button(
+                        label="Download data as Excel",
+                        data=excel_buffer,
+                        file_name='extracted_priority_data.xlsx',
+                        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        use_container_width=True
+                    )
+
+                    # JSON download
+                    json_buffer = convert_df_to_json(selected_df)
+                    st.download_button(
+                        label="Download data as JSON",
+                        data=json_buffer,
+                        file_name='extracted_priority_data.json',
+                        mime='application/json',
+                        use_container_width=True
+                    )
+
         else:
             st.error("Failed to load the file. Please try again.")
+
+    # Expander for tool information
+    with st.expander("Learn More About the Priority Extract Tool"):
+        st.write(
+            """
+            **Priority Extract Tool** is designed to help users analyze and extract prioritized data from uploaded datasets. It supports various file formats (CSV, Excel), processes the data based on user-selected criteria, and formats the extracted information for easy download. Key features include:
+
+            - **File Upload**: Users can upload CSV or Excel files.
+            - **Data Preview**: View a snapshot of the uploaded data.
+            - **Priority Extraction**: Select and extract priorities based on specified keys (e.g., Business, R&D, Sustainability).
+            - **Data Cleaning**: Remove unwanted characters from descriptions.
+            - **Download Options**: Export the processed data in CSV, Excel, or JSON formats.
+            - **User Interface**: Interactive elements for file upload, data selection, and download.
+
+            This tool streamlines data handling, enabling users to quickly obtain and utilize relevant priority information from their datasets.
+            """
+        )
 
 if __name__ == "__main__":
     main()
